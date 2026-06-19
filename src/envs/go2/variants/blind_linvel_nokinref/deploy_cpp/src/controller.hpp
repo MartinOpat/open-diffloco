@@ -7,6 +7,7 @@
 /// See: https://github.com/unitreerobotics/unitree_sdk2
 
 #include "policy.hpp"
+#include "state_estimator.hpp"
 
 #include <Eigen/Core>
 #include <array>
@@ -153,6 +154,7 @@ private:
   std::shared_ptr<NumpyPolicy> policy_;
   std::string interface_;
   CommandSource command_source_;
+  std::unique_ptr<ContactAidedKF> state_est_;
 
   // Control timing
   double dt_cmd_ = 0.002;      // 500 Hz command rate
@@ -200,6 +202,9 @@ private:
   Eigen::Matrix<double, 12, 1> hw_vel_ = Eigen::Matrix<double, 12, 1>::Zero();
   Eigen::Vector4d imu_quat_ = Eigen::Vector4d(1, 0, 0, 0);
   Eigen::Vector3d imu_gyro_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d imu_accel_ = Eigen::Vector3d::Zero();
+  std::array<double, 4> foot_forces_ = {0, 0, 0, 0};
+  bool foot_forces_valid_ = false;
 
   // SDK handles (opaque - only used in controller.cpp)
   // Forward-declared in the .cpp to avoid pulling SDK headers here.

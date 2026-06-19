@@ -35,6 +35,19 @@ double load_scalar(const npz::NpzFile &npz, const std::string &key) {
   return it->second.to_scalar();
 }
 
+Eigen::MatrixXd make_kinematic_ref(int step_k, double scale) {
+  Eigen::MatrixXd ref = Eigen::MatrixXd::Zero(step_k * 2, 12);
+  for (int t = 0; t < ref.rows(); ++t) {
+    const double wave = -std::cos((2.0 * M_PI / step_k) * t) * (scale / 2.0) +
+                        (scale / 2.0);
+    ref(t, 2) = wave;
+    ref(t, 5) = scale - wave;
+    ref(t, 8) = scale - wave;
+    ref(t, 11) = wave;
+  }
+  return ref;
+}
+
 } // namespace
 
 //  Construction
@@ -92,6 +105,14 @@ NumpyPolicy::NumpyPolicy(const std::string &npz_path) {
             << actor_frame_obs_dim << "D\n";
 
   std::cout << "  dt=" << dt << "s\n";
+
+  if (npz::has_key(npz, "gait_ref")) {
+    gait_ref = load_mat(npz, "gait_ref");
+    cycle_len = static_cast<int>(gait_ref.rows());
+  } else {
+    gait_ref = make_kinematic_ref(20, 0.3);
+    cycle_len = static_cast<int>(gait_ref.rows());
+  }
 
   // Actuator gains
   if (npz::has_key(npz, "actuator_kp")) {
@@ -151,6 +172,13 @@ NumpyPolicy::get_target_joints(const Eigen::VectorXd &action) const {
     return default_joints + a * action_scale(0);
   }
   return default_joints + a.cwiseProduct(action_scale);
+}
+
+Eigen::VectorXd NumpyPolicy::get_target_joints(const Eigen::VectorXd &action,
+                                               int phase_idx) const {
+  Eigen::VectorXd target = get_target_joints(action);
+  const int idx = ((phase_idx % cycle_len) + cycle_len) % cycle_len;
+  return target + gait_ref.row(idx).transpose();
 }
 
 } // namespace jave

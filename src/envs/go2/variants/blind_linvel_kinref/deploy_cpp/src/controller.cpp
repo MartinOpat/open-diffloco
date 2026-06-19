@@ -129,6 +129,7 @@ Go2Deploy::Go2Deploy(std::shared_ptr<NumpyPolicy> policy,
 #endif
 
   sdk_ = std::make_unique<SdkHandles>();
+  state_est_ = std::make_unique<ContactAidedKF>(policy_->dt);
 
   policy_decimation_ = static_cast<int>(std::round(policy_->dt / dt_cmd_));
   if (policy_decimation_ < 1)
@@ -278,6 +279,14 @@ void Go2Deploy::LowStateHandler(const void *message) {
   imu_quat_ << imu.quaternion()[0], imu.quaternion()[1], imu.quaternion()[2],
       imu.quaternion()[3];
   imu_gyro_ << imu.gyroscope()[0], imu.gyroscope()[1], imu.gyroscope()[2];
+  imu_accel_ << imu.accelerometer()[0], imu.accelerometer()[1],
+      imu.accelerometer()[2];
+  const auto &ff = msg.foot_force();
+  foot_forces_[0] = static_cast<double>(ff[1]); // FL
+  foot_forces_[1] = static_cast<double>(ff[0]); // FR
+  foot_forces_[2] = static_cast<double>(ff[3]); // RL
+  foot_forces_[3] = static_cast<double>(ff[2]); // RR
+  foot_forces_valid_ = true;
 
   if (command_source_ == CommandSource::WIRELESS) {
     const auto &remote = msg.wireless_remote();
@@ -416,8 +425,9 @@ void Go2Deploy::handle_walking() {
     Eigen::VectorXd action = (*policy_)(obs);
     last_action_ = action;
 
-    auto target_sim = policy_->get_target_joints(action);
+    auto target_sim = policy_->get_target_joints(action, phase_step_);
     walking_target_hw_ = sim_to_hw(target_sim);
+    phase_step_ = (phase_step_ + 1) % policy_->cycle_len;
     ++step_count_;
 
     if (step_count_ <= 3) {
@@ -425,10 +435,12 @@ void Go2Deploy::handle_walking() {
           (policy_->actor_history_len - 1) * policy_->actor_frame_obs_dim;
       const auto frame = obs.segment(frame_start, policy_->actor_frame_obs_dim);
       std::cout << "\n  [step " << step_count_ << "] DIAGNOSTIC:\n";
-      std::cout << "    obs angvel  = " << frame.head<3>().transpose() << "\n";
-      std::cout << "    obs gravity = " << frame.segment<3>(3).transpose()
+      std::cout << "    obs linvel  = " << frame.head<3>().transpose() << "\n";
+      std::cout << "    obs angvel  = " << frame.segment<3>(3).transpose()
                 << "\n";
-      std::cout << "    obs cmd     = " << frame.segment<3>(6).transpose()
+      std::cout << "    obs gravity = " << frame.segment<3>(6).transpose()
+                << "\n";
+      std::cout << "    obs cmd     = " << frame.segment<3>(9).transpose()
                 << "\n";
       std::cout << "    action[:4]  = " << action.head(4).transpose() << "\n";
       std::cout << "    target[:4]  = " << target_sim.head(4).transpose()
@@ -480,6 +492,9 @@ Eigen::VectorXd Go2Deploy::build_obs() {
   Eigen::Matrix<double, 12, 1> sim_pos, sim_vel;
   Eigen::Vector4d quat;
   Eigen::Vector3d gyro;
+  Eigen::Vector3d accel;
+  std::array<double, 4> foot_forces;
+  bool foot_forces_valid = false;
 
   {
     std::lock_guard<std::mutex> lock(sensor_mutex_);
@@ -487,16 +502,26 @@ Eigen::VectorXd Go2Deploy::build_obs() {
     sim_vel = hw_to_sim(hw_vel_);
     quat = imu_quat_;
     gyro = imu_gyro_;
+    accel = imu_accel_;
+    foot_forces = foot_forces_;
+    foot_forces_valid = foot_forces_valid_;
   }
 
   Eigen::Vector4d inv_q = quat_inv(quat);
   Eigen::Vector3d gravity = quat_rotate(Eigen::Vector3d(0, 0, -1), inv_q);
+  const double *ff_ptr = foot_forces_valid ? foot_forces.data() : nullptr;
+  auto [local_linvel, est_height] =
+      state_est_->step(accel, quat, gyro, sim_pos, sim_vel, ff_ptr);
+  (void)est_height;
 
   Eigen::VectorXd joint_pos_err =
       sim_pos.cast<double>() - policy_->default_joints;
+  const double phase_angle =
+      2.0 * M_PI * static_cast<double>(phase_step_) /
+      static_cast<double>(policy_->cycle_len);
 
-  // Actor frame: angvel(3), gravity(3), cmd(3), qpos_err(12),
-  // qvel(12), last_action(12).
+  // Actor frame: linvel(3), angvel(3), gravity(3), cmd(3), qpos_err(12),
+  // qvel(12), last_action(12), sin/cos phase(2).
   const int obs_dim = policy_->actor_frame_obs_dim;
   Eigen::VectorXd frame = Eigen::VectorXd::Zero(obs_dim);
 
@@ -521,12 +546,15 @@ Eigen::VectorXd Go2Deploy::build_obs() {
     }
   };
 
+  put3(local_linvel);
   put3(gyro);
   put3(gravity);
   put3(get_cmd());
   putN(joint_pos_err);
   put12(sim_vel);
   put12(last_action_);
+  Eigen::Vector2d phase_encoding(std::sin(phase_angle), std::cos(phase_angle));
+  putN(phase_encoding);
   if (idx != obs_dim)
     throw std::runtime_error(
         "Actor frame dimension does not match policy metadata");
@@ -581,6 +609,8 @@ void Go2Deploy::transition(State to) {
   case State::WALKING:
     last_action_.setZero();
     actor_obs_history_.resize(0);
+    state_est_->reset();
+    phase_step_ = 0;
     set_cmd(0.0, 0.0, 0.0);
     walking_target_hw_ = sim_to_hw(policy_->default_joints);
     step_count_ = 0;

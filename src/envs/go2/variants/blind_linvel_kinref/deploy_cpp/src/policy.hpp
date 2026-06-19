@@ -30,6 +30,8 @@ public:
 
   /// Compute PD target joint positions from action.
   Eigen::VectorXd get_target_joints(const Eigen::VectorXd &action) const;
+  Eigen::VectorXd get_target_joints(const Eigen::VectorXd &action,
+                                    int phase_idx) const;
 
   //  Public config (read after construction)
 
@@ -46,6 +48,8 @@ public:
   Eigen::Vector2d cmd_vel_x_range = Eigen::Vector2d(-1.5, 1.5);
   Eigen::Vector2d cmd_vel_y_range = Eigen::Vector2d(-1.0, 1.0);
   Eigen::Vector2d cmd_yaw_rate_range = Eigen::Vector2d(-1.5, 1.5);
+  Eigen::MatrixXd gait_ref;
+  int cycle_len = 40;
   double dt = 0.0;
   // Actuator gains from training (NaN if not available)
   double training_kp = std::numeric_limits<double>::quiet_NaN();
