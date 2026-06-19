@@ -31,6 +31,7 @@ target_link_libraries(deploy_blind_linvel_kinref_core PUBLIC Eigen3::Eigen ZLIB:
 # Controller library (state machine + DDS)
 add_library(deploy_blind_linvel_kinref_controller
     src/controller.cpp
+    src/state_estimator.cpp
 )
 target_link_libraries(deploy_blind_linvel_kinref_controller PUBLIC deploy_blind_linvel_kinref_core unitree_sdk2)
 if(OPEN_DIFFLOCO_ENABLE_ROS2)
@@ -43,7 +44,3 @@ add_executable(deploy_blind_linvel_kinref src/main.cpp)
 target_compile_definitions(deploy_blind_linvel_kinref PRIVATE
     JAVE_DEPLOY_REPO_ROOT="${CMAKE_SOURCE_DIR}/")
 target_link_libraries(deploy_blind_linvel_kinref PRIVATE deploy_blind_linvel_kinref_controller)
-
-# Validation tool
-add_executable(test_policy_blind_linvel_kinref src/test_policy.cpp)
-target_link_libraries(test_policy_blind_linvel_kinref PRIVATE deploy_blind_linvel_kinref_core)

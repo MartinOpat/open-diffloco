@@ -43,7 +43,3 @@ add_executable(deploy_highspeed_nokinref src/main.cpp)
 target_compile_definitions(deploy_highspeed_nokinref PRIVATE
     JAVE_DEPLOY_REPO_ROOT="${CMAKE_SOURCE_DIR}/")
 target_link_libraries(deploy_highspeed_nokinref PRIVATE deploy_highspeed_nokinref_controller)
-
-# Validation tool
-add_executable(test_policy_highspeed_nokinref src/test_policy.cpp)
-target_link_libraries(test_policy_highspeed_nokinref PRIVATE deploy_highspeed_nokinref_core)

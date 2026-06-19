@@ -42,7 +42,3 @@ add_executable(deploy_blind_nolinvel_nokinref src/main.cpp)
 target_compile_definitions(deploy_blind_nolinvel_nokinref PRIVATE
     JAVE_DEPLOY_REPO_ROOT="${CMAKE_SOURCE_DIR}/")
 target_link_libraries(deploy_blind_nolinvel_nokinref PRIVATE deploy_blind_nolinvel_nokinref_controller)
-
-# Validation tool
-add_executable(test_policy_blind_nolinvel_nokinref src/test_policy.cpp)
-target_link_libraries(test_policy_blind_nolinvel_nokinref PRIVATE deploy_blind_nolinvel_nokinref_core)
