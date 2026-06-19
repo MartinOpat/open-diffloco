@@ -1,5 +1,7 @@
 # Open-DiffLoco
 
+TODO: Add (git) pages & deployment vidoes
+
 Open-DiffLoco is a framework for training deployable blind quadruped
 locomotion policies with differentiable simulation in MuJoCo MJX.
 
