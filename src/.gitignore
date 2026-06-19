@@ -1,0 +1,27 @@
+# Ignore menagerie repo
+mujoco_menagerie
+mujoco_menagerie/
+
+mujoco_playground
+mujoco_playground/
+
+# Envs
+env
+.env
+venv*
+.venv*
+
+# Local
+__pycache__
+
+# shac repo
+jax_shac
+jax_shac/
+
+# Exported policies (the ones that are too big anyway ... oops)
+shac_policy_final.pkl
+*.pkl
+training_runs/
+
+# Plot data
+*.npy

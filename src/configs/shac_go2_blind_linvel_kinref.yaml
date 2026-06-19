@@ -1,0 +1,5 @@
+algorithm: shac
+embodiment: go2
+variant: blind_linvel_kinref
+model_xml: src/envs/go2/models/scene_mjx.xml
+steps: 8000000
