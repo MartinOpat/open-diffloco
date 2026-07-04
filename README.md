@@ -6,8 +6,8 @@
     <th align="center">Fast forward and yaw</th>
   </tr>
   <tr>
-    <td align="center"><img src="./docs/1mps-good-web.gif" alt="Omnidirectional" width="400"></td>
-    <td align="center"><img src="./docs/fast-speed-web.gif" alt="Fast-forward-and-yaw" width="400"></td>
+    <td align="center"><img src="./docs/1mps-good-web.gif" alt="Omnidirectional" width="240"></td>
+    <td align="center"><img src="./docs/fast-speed-web.gif" alt="Fast-forward-and-yaw" width="240"></td>
   </tr>
 </table>
 
