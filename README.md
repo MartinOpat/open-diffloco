@@ -1,6 +1,15 @@
 # Open-DiffLoco
 
-TODO: Add (git) pages & deployment vidoes
+<table>
+  <tr>
+    <th align="center">Omnidirectional</th>
+    <th align="center">Fast forward and yaw</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="./docs/1mps-good-web.gif" alt="Omnidirectional" width="400"></td>
+    <td align="center"><img src="./docs/fast-speed-web.gif" alt="Fast-forward-and-yaw" width="400"></td>
+  </tr>
+</table>
 
 Open-DiffLoco is a framework for training deployable blind quadruped
 locomotion policies with differentiable simulation in MuJoCo MJX.
@@ -13,11 +22,6 @@ Documentation:
 - [Algorithms](docs/algorithms.md)
 - [Implicit terrain](docs/terrain.md)
 - [Deployment](docs/deployment.md)
-
-TODO: Document features which are implemented and have been tested but have been found not strictly necessary and thus are disabled by default, namely:
-  - Training curriculum
-  - Learning rate decay
-  - Stochastic policy formulation (std as a learned parameter of the NN)
 
 ## Go2 Variants
 
