@@ -110,3 +110,10 @@ Velocity command publishers are available under `src/deploy/`:
 python -m src.deploy.terminal_command --control diffloco
 python -m src.deploy.wireless_command --net lo --control diffloco --topic /velocity_command
 ```
+
+To cite this work, please use the following
+```tex
+TODO
+```
+
+Project page: [https://diffloco.martin-opat.com/](https://diffloco.martin-opat.com/)
