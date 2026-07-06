@@ -12,7 +12,7 @@ import numpy as np
 import mujoco
 import mujoco.viewer
 
-from src.core.data_structures import Normalizer, EnvState
+from src.core.data_structures import Normalizer
 from src.core.networks import Actor
 from src.core.utils import quat_inv, quat_rotate
 from src.envs.go2.environment import Go2Env
@@ -57,48 +57,6 @@ def _load_env_kwargs(policy_path: str) -> dict:
         print(f"  WARNING: No hparams.json found at {hparams_path}, using defaults")
 
     return kwargs
-
-
-def _make_vis_terrain(nrow: int, ncol: int, mode: str) -> np.ndarray:
-    """Generate a deterministic heightfield in [-1, 1]."""
-    x = np.linspace(-np.pi, np.pi, ncol)
-    y = np.linspace(-np.pi, np.pi, nrow)
-    xg, yg = np.meshgrid(x, y)
-
-    terrain = np.zeros((nrow, ncol))
-
-    if mode in ("bumps", "both"):
-        terrain += 0.4 * np.sin(2.0 * xg) * np.sin(2.0 * yg)
-        terrain += 0.3 * np.sin(3.5 * xg + 1.0) * np.sin(2.5 * yg + 0.7)
-        terrain += 0.2 * np.sin(5.0 * xg + 2.0) * np.sin(4.0 * yg + 1.5)
-
-    if mode in ("slope", "both"):
-        terrain += 0.6 * np.linspace(-1, 1, ncol)[None, :]
-
-    t_max = max(np.max(np.abs(terrain)), 1e-8)
-    terrain = terrain / t_max
-
-    return terrain.reshape(-1)
-
-
-def _apply_vis_terrain(env, env_state, mj_model, terrain_mode: str):
-    """Apply deterministic terrain to the render model and env state."""
-    raw = _make_vis_terrain(100, 100, terrain_mode)
-
-    mj_model.hfield_data[:] = (0.5 + 0.5 * raw).astype(np.float32)
-
-    new_info = dict(env_state.info)
-    new_info["hfield_data"] = jp.array(raw)
-    new_info["difficulty"] = jp.array(1.0)
-    env_state = EnvState(
-        data=env_state.data,
-        obs=env_state.obs,
-        reward=env_state.reward,
-        done=env_state.done,
-        info=new_info,
-        metrics=env_state.metrics,
-    )
-    return env_state
 
 
 def _quat_to_yaw(quat):
@@ -223,22 +181,13 @@ def _override_cmd(env_state, new_cmd):
     return env_state.replace(obs=history.reshape(-1), info=new_info)
 
 
-def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = None):
+def visualize_interactive(policy_path: str):
     """Open the interactive MuJoCo viewer."""
     print(f"Loading policy from {policy_path}")
     with open(policy_path, "rb") as f:
         state = pickle.load(f)
 
     env_kwargs = _load_env_kwargs(policy_path)
-
-    if terrain:
-        env_kwargs["xml_path"] = env_kwargs.get("xml_path", "").replace(
-            "scene_mjx.xml", "scene_mjx_terrain.xml"
-        )
-        if "scene_mjx_terrain" not in env_kwargs.get("xml_path", ""):
-            env_kwargs["xml_path"] = "unitree_go2/scene_mjx_terrain.xml"
-        print(f"  Terrain mode: {terrain}")
-
     env = Go2Env(**env_kwargs, max_episode_length=int(1e9))
     mj_model = env.mj_model
     mj_data = mujoco.MjData(mj_model)
@@ -266,9 +215,6 @@ def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = N
     rng = jax.random.PRNGKey(42)
     env_state = env.reset(rng)
 
-    if terrain and env.has_hfield:
-        env_state = _apply_vis_terrain(env, env_state, mj_model, terrain)
-
     mj_data.qpos[:] = np.array(env_state.data.qpos)
     mj_data.qvel[:] = np.array(env_state.data.qvel)
     mujoco.mj_forward(mj_model, mj_data)
@@ -292,10 +238,6 @@ def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = N
         nonlocal rng
         rng, key = jax.random.split(rng)
         viewer_state["env_state"] = env.reset(key)
-        if terrain and env.has_hfield:
-            viewer_state["env_state"] = _apply_vis_terrain(
-                env, viewer_state["env_state"], mj_model, terrain
-            )
         viewer_state["step_count"] = 0
         viewer_state["history"] = []
         viewer_state["vel_ema"][:] = 0.0
@@ -340,9 +282,6 @@ def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = N
     print("  Ctrl + Right-click - Apply torque to body")
     print(f"\nCommand step: {cmd_step}")
     print(f"Ranges: vx={vx_range}, vy={vy_range}, yaw={yaw_range}")
-    if terrain:
-        print(f"Terrain: {terrain}")
-    print(f"Running at {speed}x speed...")
 
     with mujoco.viewer.launch_passive(
         mj_model, mj_data, key_callback=key_callback
@@ -409,9 +348,6 @@ def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = N
 
                 if es.done > 0.5:
                     print(f"  Episode terminated at step {viewer_state['step_count']}")
-                    if terrain and env.has_hfield:
-                        es = _apply_vis_terrain(env, es, mj_model, terrain)
-                        viewer_state["env_state"] = es
 
             viewer.sync()
 
@@ -431,9 +367,7 @@ def visualize_interactive(policy_path: str, speed: float = 1.0, terrain: str = N
         )
 
 
-def visualize(
-    policy_path: str, num_steps: int = 1750, save_path: str = None, terrain: str = None
-):
+def visualize(policy_path: str, num_steps: int = 1750, save_path: str = None):
     """Generate an evaluation video and tracking plot."""
     try:
         import mediapy as media
@@ -453,13 +387,6 @@ def visualize(
         state = pickle.load(f)
 
     env_kwargs = _load_env_kwargs(policy_path)
-    if terrain:
-        env_kwargs["xml_path"] = env_kwargs.get("xml_path", "").replace(
-            "scene_mjx.xml", "scene_mjx_terrain.xml"
-        )
-        if "scene_mjx_terrain" not in env_kwargs.get("xml_path", ""):
-            env_kwargs["xml_path"] = "unitree_go2/scene_mjx_terrain.xml"
-        print(f"  Terrain mode: {terrain}")
     env = Go2Env(**env_kwargs, max_episode_length=int(1e9))
     mj_model = env.mj_model
     mj_data = mujoco.MjData(mj_model)
@@ -482,27 +409,6 @@ def visualize(
     n_segments = 7
     seg_len = num_steps // n_segments
     rng = jax.random.PRNGKey(7)
-
-    vx_range = np.array([env.cmd_vel_x_range[0], env.cmd_vel_x_range[1]])
-    vy_range = np.array([env.cmd_vel_y_range[0], env.cmd_vel_y_range[1]])
-    yaw_range = np.array([env.cmd_yaw_rate_range[0], env.cmd_yaw_rate_range[1]])
-
-    def _sample_axis(key, axis_range):
-        """Sample a value from a command range."""
-        lo, hi = float(axis_range[0]), float(axis_range[1])
-        val = float(jax.random.uniform(key, minval=lo, maxval=hi))
-        return val
-
-    def _sample_cmd(key):
-        """Sample a full command."""
-        k1, k2, k3 = jax.random.split(key, 3)
-        return np.array(
-            [
-                _sample_axis(k1, vx_range),
-                _sample_axis(k2, vy_range),
-                _sample_axis(k3, yaw_range),
-            ]
-        )
 
     commands = [
         np.array([0.0, 0.0, 0.0]),  # 1. Standing
@@ -538,8 +444,6 @@ def visualize(
 
     rng, reset_key = jax.random.split(rng)
     env_state = env.reset(reset_key)
-    if terrain and env.has_hfield:
-        env_state = _apply_vis_terrain(env, env_state, mj_model, terrain)
     frames = []
     tracking = {
         k: [] for k in ["time", "vx", "vy", "yaw", "cmd_vx", "cmd_vy", "cmd_yaw"]
@@ -605,8 +509,7 @@ def visualize(
         tracking[k] = np.array(tracking[k])
 
     if save_path is None:
-        suffix = f"_{terrain}" if terrain else ""
-        save_path = policy_path.replace(".pkl", f"_eval{suffix}.mp4")
+        save_path = policy_path.replace(".pkl", "_eval.mp4")
 
     media.write_video(save_path, frames, fps=int(1.0 / env.dt))
     print(f"\nVideo saved to {save_path}")
