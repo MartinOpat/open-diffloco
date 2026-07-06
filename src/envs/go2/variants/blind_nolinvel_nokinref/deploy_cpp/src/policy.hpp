@@ -43,6 +43,8 @@ public:
   // Environment config
   Eigen::VectorXd default_joints; // (12,)
   Eigen::VectorXd action_scale;   // scalar (1,) or per-joint (12,)
+  // WARNING: command clamp ranges are hard-coded and NOT read from the
+  // exported .npz.
   Eigen::Vector2d cmd_vel_x_range = Eigen::Vector2d(-1.5, 1.5);
   Eigen::Vector2d cmd_vel_y_range = Eigen::Vector2d(-1.0, 1.0);
   Eigen::Vector2d cmd_yaw_rate_range = Eigen::Vector2d(-1.5, 1.5);
