@@ -14,7 +14,11 @@ import jax.numpy as jp
 import optax
 import numpy as np
 
-from src.core.data_structures import Normalizer, TrainState
+from src.core.data_structures import (
+    Normalizer,
+    TrainState,
+    slim_checkpoint_state,
+)
 from src.core.networks import Actor, Critic
 from src.envs.go2.environment import Go2Env
 from src.envs.go2.terrain import differentiated_ou_foot_forces
@@ -251,6 +255,55 @@ def train(
         f"terrain_slope_max={terrain_slope_max} deg, "
         f"terrain_bump_std={terrain_bump_std if terrain else 0.0}"
     )
+
+    best_reward = (
+        resumed_hparams.get("best_reward", -np.inf) if resumed_hparams else -np.inf
+    )
+
+    # Save hyperparameters up front so interrupted runs can be resumed.
+    hparams = {
+        "algorithm": "shac",
+        "total_steps": total_steps,
+        "unroll_length": unroll_length,
+        "num_envs": num_envs,
+        "actor_lr": actor_lr,
+        "critic_lr": critic_lr,
+        "gamma": gamma,
+        "gae_lambda": gae_lambda,
+        "target_update_rate": target_update_rate,
+        "critic_iterations": critic_iterations,
+        "xml_path": xml_path,
+        "action_scale": action_scale,
+        "cmd_vel_x_range": list(cmd_vel_x_range),
+        "cmd_vel_y_range": list(cmd_vel_y_range),
+        "cmd_yaw_rate_range": list(cmd_yaw_rate_range),
+        "cmd_zero_prob": list(cmd_zero_prob),
+        "cmd_ctrl_interval_range": list(cmd_ctrl_interval_range),
+        "action_noise_std_start": action_noise_std_start,
+        "action_noise_std_end": action_noise_std_end,
+        "friction_range": list(friction_range),
+        "mass_range": list(mass_range),
+        "kp_range": list(kp_range),
+        "kd_range": list(kd_range),
+        "com_offset_range": list(com_offset_range),
+        "push_velocity_range": list(push_velocity_range),
+        "push_interval_s": push_interval_s,
+        "terrain_flat_prob": terrain_flat_prob,
+        "terrain_slope_max": terrain_slope_max,
+        "terrain_bump_std": terrain_bump_std,
+        "terrain_bump_decay": terrain_bump_decay,
+        "terrain": terrain,
+        "zero_difficulty_frac": zero_difficulty_frac,
+        "curriculum_grace": curriculum_grace,
+        "curriculum_steps": curriculum_steps,
+        "seed": seed,
+        "best_reward": best_reward,
+        "max_episode_length": max_episode_length,
+        "actor_history_len": actor_history_len,
+        "env_variant": env_variant,
+    }
+    with open(f"{save_dir}/hparams.json", "w") as f:
+        json.dump(hparams, f, indent=2)
 
     # Initialize random keys
     key = jax.random.PRNGKey(seed)
@@ -776,9 +829,6 @@ def train(
     print("=" * len(header))
 
     start = time.time()
-    best_reward = (
-        resumed_hparams.get("best_reward", -np.inf) if resumed_hparams else -np.inf
-    )
     log = []
     diag_log = []
     last_checkpoint_step = state.step
@@ -894,20 +944,20 @@ def train(
             if reward > best_reward and state.step > 5000:
                 best_reward = reward
                 with open(f"{save_dir}/policy_best.pkl", "wb") as f:
-                    pickle.dump(state, f)
+                    pickle.dump(slim_checkpoint_state(state), f)
                 print(f"  >> New best! Reward: {best_reward:.3f}")
 
             # Periodic checkpoint
             if state.step - last_checkpoint_step >= checkpoint_interval:
                 ckpt_path = os.path.join(save_dir, "checkpoint_latest.pkl")
                 with open(ckpt_path, "wb") as f:
-                    pickle.dump(state, f)
+                    pickle.dump(slim_checkpoint_state(state), f)
                 last_checkpoint_step = state.step
                 print(f"  >> Checkpoint saved at step {state.step}")
 
     # Save final state and logs
     with open(f"{save_dir}/policy_final.pkl", "wb") as f:
-        pickle.dump(state, f)
+        pickle.dump(slim_checkpoint_state(state), f)
     np.save(f"{save_dir}/log.npy", np.array(log))
 
     if diagnose and diag_log:
@@ -935,48 +985,8 @@ def train(
     )
     print(f"Best reward: {best_reward:.3f}")
 
-    # Save hyperparameters
-    hparams = {
-        "algorithm": "shac",
-        "total_steps": total_steps,
-        "unroll_length": unroll_length,
-        "num_envs": num_envs,
-        "actor_lr": actor_lr,
-        "critic_lr": critic_lr,
-        "gamma": gamma,
-        "gae_lambda": gae_lambda,
-        "target_update_rate": target_update_rate,
-        "critic_iterations": critic_iterations,
-        "xml_path": xml_path,
-        "action_scale": action_scale,
-        "cmd_vel_x_range": list(cmd_vel_x_range),
-        "cmd_vel_y_range": list(cmd_vel_y_range),
-        "cmd_yaw_rate_range": list(cmd_yaw_rate_range),
-        "cmd_zero_prob": list(cmd_zero_prob),
-        "cmd_ctrl_interval_range": list(cmd_ctrl_interval_range),
-        "action_noise_std_start": action_noise_std_start,
-        "action_noise_std_end": action_noise_std_end,
-        "friction_range": list(friction_range),
-        "mass_range": list(mass_range),
-        "kp_range": list(kp_range),
-        "kd_range": list(kd_range),
-        "com_offset_range": list(com_offset_range),
-        "push_velocity_range": list(push_velocity_range),
-        "push_interval_s": push_interval_s,
-        "terrain_flat_prob": terrain_flat_prob,
-        "terrain_slope_max": terrain_slope_max,
-        "terrain_bump_std": terrain_bump_std,
-        "terrain_bump_decay": terrain_bump_decay,
-        "terrain": terrain,
-        "zero_difficulty_frac": zero_difficulty_frac,
-        "curriculum_grace": curriculum_grace,
-        "curriculum_steps": curriculum_steps,
-        "seed": seed,
-        "best_reward": best_reward,
-        "max_episode_length": max_episode_length,
-        "actor_history_len": actor_history_len,
-        "env_variant": env_variant,
-    }
+    # Update hyperparameters with the final result.
+    hparams["best_reward"] = best_reward
     with open(f"{save_dir}/hparams.json", "w") as f:
         json.dump(hparams, f, indent=2)
 
