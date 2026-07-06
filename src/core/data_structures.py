@@ -138,3 +138,8 @@ class TrainState:
     ldm_params: Any = None
     ldm_opt: Any = None
     replay_buffer: Any = None
+
+
+def slim_checkpoint_state(state: TrainState) -> TrainState:
+    """Strip full state before pickling.
+    return state.replace(env_state=None, replay_buffer=None)
