@@ -59,7 +59,7 @@ inline Eigen::VectorXd tanh_vec(const Eigen::VectorXd &x) {
 inline Eigen::VectorXd layer_norm(const Eigen::VectorXd &x,
                                   const Eigen::VectorXd &scale,
                                   const Eigen::VectorXd &bias,
-                                  double eps = 1e-5) {
+                                  double eps = 1e-6) {
   const double mean = x.mean();
   const double var = (x.array() - mean).square().mean();
   return scale.array() * (x.array() - mean) / std::sqrt(var + eps) +
