@@ -37,13 +37,17 @@ double load_scalar(const npz::NpzFile &npz, const std::string &key) {
 
 Eigen::MatrixXd make_kinematic_ref(int step_k, double scale) {
   Eigen::MatrixXd ref = Eigen::MatrixXd::Zero(step_k * 2, 12);
-  for (int t = 0; t < ref.rows(); ++t) {
-    const double wave = -std::cos((2.0 * M_PI / step_k) * t) * (scale / 2.0) +
-                        (scale / 2.0);
-    ref(t, 2) = wave;
-    ref(t, 5) = scale - wave;
-    ref(t, 8) = scale - wave;
-    ref(t, 11) = wave;
+  for (int i = 0; i < step_k; ++i) {
+    const double wave =
+        -std::cos((2.0 * M_PI / step_k) * i) * (scale / 2.0) + (scale / 2.0);
+    ref(i, 4) = wave;                  // FR thigh
+    ref(i, 5) = -2.0 * wave;           // FR calf
+    ref(i, 7) = wave;                  // RL thigh
+    ref(i, 8) = -2.0 * wave;           // RL calf
+    ref(step_k + i, 1) = wave;         // FL thigh
+    ref(step_k + i, 2) = -2.0 * wave;  // FL calf
+    ref(step_k + i, 10) = wave;        // RR thigh
+    ref(step_k + i, 11) = -2.0 * wave; // RR calf
   }
   return ref;
 }

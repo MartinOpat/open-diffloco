@@ -1,5 +1,27 @@
 # Deployment
 
+## Exporting a trained policy
+
+The C++ deployment executables consume a `.npz` file, not the pickled
+training checkpoints. Export a checkpoint with:
+
+```bash
+python -m src.deploy.export_policy training_runs/<run>/policy_best.pkl
+```
+
+This writes `training_runs/<run>/policy_best_deploy.npz` containing the actor
+weights, observation-normalizer statistics, actuator gains, and environment
+metadata. The environment variant is read from the run's `hparams.json`, so
+variant-specific data (e.g. the kinematic gait reference for
+`blind_linvel_kinref`) is included automatically.
+
+> **Warning:** the C++ deployment clamps velocity commands to ranges
+> hard-coded in each variant's `policy.hpp`. They are not read from the
+> `.npz`. Keep them in sync with the training command ranges printed by the
+> export script.
+
+## Building the C++ deployment
+
 C++ deployment code is co-located with each Go2 variant and can be built from the repository root.
 
 Build without ROS2:

@@ -72,6 +72,14 @@ Each variant has its own executable:
 - `deploy_blind_linvel_kinref`
 - `deploy_highspeed_nokinref`
 
+Export a trained checkpoint to the deployment `.npz` format first:
+
+```bash
+python -m src.deploy.export_policy training_runs/<run>/policy_best.pkl
+```
+
+See [docs/deployment.md](docs/deployment.md) for details.
+
 Terminal control is the default command source:
 
 ```bash

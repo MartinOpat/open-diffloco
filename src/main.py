@@ -53,10 +53,12 @@ GO2_DEFAULTS = {
     "actor_lr": 5e-3,
     "critic_lr": 5e-4,
     "lr_decay": False,
-    "use_adaptive_lr": False,
     "diagnose": False,
     "resume": None,
     "checkpoint_interval": 100_000,
+    "cmd_vel_x_range": None,
+    "cmd_vel_y_range": None,
+    "cmd_yaw_rate_range": None,
     "cmd_zero_prob": [
         0.1,
         0.7,
@@ -73,7 +75,6 @@ GO2_DEFAULTS = {
     "curriculum_steps": None,
     "visualize": None,
     "interactive": None,
-    "vis_terrain": None,
     "plot": None,
 }
 
@@ -82,6 +83,24 @@ GO2_VARIANTS = {
     "blind_linvel_nokinref",
     "blind_linvel_kinref",
     "highspeed_nokinref",
+}
+
+_BLIND_CMD_DEFAULTS = {
+    "cmd_vel_x_range": (-2.0, 2.0),
+    "cmd_vel_y_range": (-1.0, 1.0),
+    "cmd_yaw_rate_range": (-1.5, 1.5),
+}
+
+# Per-variant command-range defaults, used when not set via CLI or config.
+VARIANT_CMD_DEFAULTS = {
+    "blind_nolinvel_nokinref": _BLIND_CMD_DEFAULTS,
+    "blind_linvel_nokinref": _BLIND_CMD_DEFAULTS,
+    "blind_linvel_kinref": _BLIND_CMD_DEFAULTS,
+    "highspeed_nokinref": {
+        "cmd_vel_x_range": (-3.0, 3.0),
+        "cmd_vel_y_range": (0.0, 0.0),
+        "cmd_yaw_rate_range": (-1.0, 1.0),
+    },
 }
 
 def _build_go2_parser(subparsers):
@@ -126,12 +145,6 @@ def _build_go2_parser(subparsers):
         "--action-scale", type=float, default=argparse.SUPPRESS, help="Action scale"
     )
     parser.add_argument(
-        "--swing-height",
-        type=float,
-        default=argparse.SUPPRESS,
-        help="Desired swing foot clearance above flat ground",
-    )
-    parser.add_argument(
         "--action-noise-std-start",
         type=float,
         default=argparse.SUPPRESS,
@@ -173,12 +186,6 @@ def _build_go2_parser(subparsers):
         help="Enable learning rate decay",
     )
     parser.add_argument(
-        "--use-adaptive-lr",
-        action="store_true",
-        default=argparse.SUPPRESS,
-        help="Enable SGDR learning rate",
-    )
-    parser.add_argument(
         "--diagnose",
         action="store_true",
         default=argparse.SUPPRESS,
@@ -197,6 +204,33 @@ def _build_go2_parser(subparsers):
         help="Save checkpoint every N steps",
     )
 
+    parser.add_argument(
+        "--cmd-vel-x-range",
+        type=float,
+        nargs=2,
+        default=argparse.SUPPRESS,
+        metavar=("LO", "HI"),
+        help="Forward velocity command range in m/s "
+        "(default depends on variant, see VARIANT_CMD_DEFAULTS)",
+    )
+    parser.add_argument(
+        "--cmd-vel-y-range",
+        type=float,
+        nargs=2,
+        default=argparse.SUPPRESS,
+        metavar=("LO", "HI"),
+        help="Lateral velocity command range in m/s "
+        "(default depends on variant, see VARIANT_CMD_DEFAULTS)",
+    )
+    parser.add_argument(
+        "--cmd-yaw-rate-range",
+        type=float,
+        nargs=2,
+        default=argparse.SUPPRESS,
+        metavar=("LO", "HI"),
+        help="Yaw rate command range in rad/s "
+        "(default depends on variant, see VARIANT_CMD_DEFAULTS)",
+    )
     parser.add_argument(
         "--cmd-zero-prob",
         type=float,
@@ -284,13 +318,6 @@ def _build_go2_parser(subparsers):
         help="Path to policy.pkl for interactive MuJoCo viewer",
     )
     parser.add_argument(
-        "--vis-terrain",
-        type=str,
-        default=argparse.SUPPRESS,
-        choices=["bumps", "slope", "both"],
-        help="Terrain mode for visualization (bumps, slope, or both)",
-    )
-    parser.add_argument(
         "--plot", type=str, default=argparse.SUPPRESS, help="Path to log.npy to plot"
     )
 
@@ -331,7 +358,9 @@ def _apply_config(args, config):
     raw_values = vars(args)
     config_values = _flatten_config(config)
 
-    embodiment = raw_values.get("embodiment") or config_values.pop("embodiment", None)
+    # Always pop "embodiment" to avoid it being treated as unknown config key
+    config_embodiment = config_values.pop("embodiment", None)
+    embodiment = raw_values.get("embodiment") or config_embodiment
     if embodiment is not None:
         embodiment = str(embodiment).lower()
 
@@ -365,15 +394,24 @@ def _apply_config(args, config):
     return argparse.Namespace(**merged)
 
 
+def _resolve_cmd_ranges(args):
+    """Resolve command ranges: CLI/config values win, else per-variant defaults."""
+    resolved = {}
+    for key, default in VARIANT_CMD_DEFAULTS[args.variant].items():
+        value = getattr(args, key)
+        resolved[key] = tuple(value) if value is not None else default
+    return resolved
+
+
 def _run_go2(args):
     if args.interactive:
         from src.visualization.go2 import visualize_interactive
 
-        visualize_interactive(args.interactive, terrain=args.vis_terrain)
+        visualize_interactive(args.interactive)
     elif args.visualize:
         from src.visualization.go2 import visualize
 
-        visualize(args.visualize, terrain=args.vis_terrain)
+        visualize(args.visualize)
     elif args.plot:
         from src.visualization.go2 import plot_training
 
@@ -392,10 +430,7 @@ def _run_go2(args):
             curriculum_grace = args.curriculum_grace
             curriculum_steps = args.curriculum_steps
 
-        if args.lr_decay and args.use_adaptive_lr:
-            print(f"WARNING: Both linear and adaptive learning rate are enabled!")
-            print(f"  using adaptive...")
-            args.lr_decay = False
+        cmd_ranges = _resolve_cmd_ranges(args)
 
         train_kwargs = dict(
             total_steps=args.steps,
@@ -420,13 +455,12 @@ def _run_go2(args):
             max_episode_length=args.max_episode_length,
             actor_history_len=args.actor_history_len,
             env_variant=args.variant,
+            **cmd_ranges,
         )
         if args.action_noise_std_start is not None:
             train_kwargs["action_noise_std_start"] = args.action_noise_std_start
         if args.action_noise_std_end is not None:
             train_kwargs["action_noise_std_end"] = args.action_noise_std_end
-        if args.algorithm == "jave":
-            train_kwargs.update(use_adaptive_lr=args.use_adaptive_lr)
 
         state, folder = train(**train_kwargs)
 
@@ -440,7 +474,7 @@ def _run_go2(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SHAC/AHAC: Adaptive Horizon Actor-Critic for Differentiable Simulation",
+        description="Open-DiffLoco: SHAC/JAVE locomotion training with differentiable simulation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

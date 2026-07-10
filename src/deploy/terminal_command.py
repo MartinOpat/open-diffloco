@@ -29,18 +29,14 @@ MAX_ANGULAR_SPEED = 1.5  # rad/s
 SPEED_INCREMENT = 0.1
 
 # Key mappings
-KEY_UP = "\x1b[A"
-KEY_DOWN = "\x1b[B"
-KEY_RIGHT = "\x1b[C"
-KEY_LEFT = "\x1b[D"
-KEY_W = "w"  # Forward
-KEY_S = "s"  # Backward
-KEY_A = "a"  # Strafe left
-KEY_D = "d"  # Strafe right
-KEY_Q = "q"
-KEY_E = "e"  # Turn left (positive wz)
-KEY_R = "r"  # Turn right (negative wz)
-KEY_SPACE = " "
+KEY_UP = "\x1b[A"  # Forward (increase vx)
+KEY_DOWN = "\x1b[B"  # Backward (decrease vx)
+KEY_RIGHT = "\x1b[C"  # Strafe right (decrease vy)
+KEY_LEFT = "\x1b[D"  # Strafe left (increase vy)
+KEY_A = "a"  # Turn left (positive wz)
+KEY_D = "d"  # Turn right (negative wz)
+KEY_Q = "q"  # Quit
+KEY_SPACE = " "  # Stop (zero all commands)
 KEY_CTRL_C = "\x03"
 
 
@@ -274,8 +270,6 @@ class KeyboardController(Node):
                     KEY_RIGHT,
                     KEY_A,
                     KEY_D,
-                    KEY_W,
-                    KEY_S,
                     KEY_SPACE,
                 ]:
                     self.update_speed_from_key(key)
