@@ -12,7 +12,7 @@
 </table>
 
 Open-DiffLoco is a framework for training deployable blind quadruped
-locomotion policies with differentiable simulation in MuJoCo MJX.
+locomotion policies with differentiable simulation in MuJoCo MJX. Checkout the [arXiv communication paper](https://arxiv.org/abs/2608.02069) for more details and derivations, or [project web-page](http://diffloco.martin-opat.com/) for deployment videos!
 
 It implements the Short-Horizon Actor-Critic [(SHAC)](https://short-horizon-actor-critic.github.io/) algorithm, as well as a new method, Jacobian Augmented Value Estimation or JAVE, which further improves SHAC. This same idea could also be adopted to other successors of SHAC, e.g. Adaptive-Horizon Actor-Critic [(AHAC)](https://adaptive-horizon-actor-critic.github.io/).
 
@@ -119,9 +119,17 @@ python -m src.deploy.terminal_command --control diffloco
 python -m src.deploy.wireless_command --net lo --control diffloco --topic /velocity_command
 ```
 
-To cite this work, please use the following
+To cite this work, please use the following format:
 ```tex
-TODO
+@misc{opat2026opendifflocoopensourcedifferentiablelearning,
+      title={Open-DiffLoco: Open-Source Differentiable Learning for Deployable Blind Quadruped Locomotion}, 
+      author={Martin Opat},
+      year={2026},
+      eprint={2608.02069},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2608.02069}, 
+}
 ```
 
 Project page: [https://diffloco.martin-opat.com/](https://diffloco.martin-opat.com/)
